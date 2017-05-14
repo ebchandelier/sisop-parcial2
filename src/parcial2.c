@@ -7,6 +7,7 @@
 #include "../include/support.h"
 
 ucontext_t contextFibo, contextTRI, contextPA, contextPG, contextStartLoop;
+TCB_t fiboThread, triThread, paThread, pgThread;
 FILA2 fila;
 
 int runFibo(int n) {
@@ -37,10 +38,10 @@ void Fibo() {
 		
 		if(n<=12) {
 
-			AppendFila2(&fila, (void*)&contextFibo);
+			AppendFila2(&fila, (void*)&fiboThread);
 		}		
 		
-		swapcontext(&contextFibo, &contextStartLoop);
+		swapcontext(&(fiboThread.context), &contextStartLoop);
 	}
 }
 
@@ -71,17 +72,17 @@ void TRI() {
 		
 		if(n<=6) {
 
-			AppendFila2(&fila, (void*)&contextTRI);
+			AppendFila2(&fila, (void*)&triThread);
 		}		
 		
-		swapcontext(&contextTRI, &contextStartLoop);
+		swapcontext(&(triThread.context), &contextStartLoop);
 	}
 }
 
 
 int runPA(int n) {
 	
-	if(n==0) {
+	if(n==1) {
 
 		return 1;
 
@@ -103,10 +104,10 @@ void PA() {
 		
 		if(n<=8) {
 
-			AppendFila2(&fila, (void*)&contextPA);
+			AppendFila2(&fila, (void*)&paThread);
 		}		
 		
-		swapcontext(&contextPA, &contextStartLoop);
+		swapcontext(&(paThread.context), &contextStartLoop);
 	}
 }
 	
@@ -135,10 +136,10 @@ void PG() {
 		
 		if(n<=10) {
 
-			AppendFila2(&fila, (void*)&contextPG);
+			AppendFila2(&fila, (void*)&pgThread);
 		}		
 		
-		swapcontext(&contextPG, &contextStartLoop);
+		swapcontext(&(pgThread.context), &contextStartLoop);
 	}
 }
 
@@ -146,7 +147,6 @@ void PG() {
 int main(int argc, char const *argv[])
 {
 	//printf("%d %d %d %d\n", Fibo(10), TRI(10), PA(10), PG(10));
-	
 	
 	char stackFibo[8192];
 	getcontext(&contextFibo);
@@ -177,45 +177,28 @@ int main(int argc, char const *argv[])
     makecontext(&contextPG, (void*)&PG, 0);
 
     
-    AppendFila2(&fila, (void*)&contextPA);
-    AppendFila2(&fila, (void*)&contextPG);
-    AppendFila2(&fila, (void*)&contextFibo);
-    AppendFila2(&fila, (void*)&contextTRI);
-    
-/*
-    TCB_t fiboThread, triThread, paThread, pgThread;
     fiboThread.context = contextFibo;
     triThread.context = contextTRI;
     paThread.context = contextPA;
     pgThread.context = contextPG;
-*/
-    
-    getcontext(&contextStartLoop);
-    printf("passou por aqui  ");
 
+	
+	AppendFila2(&fila, (void*)&paThread);
+    AppendFila2(&fila, (void*)&pgThread);
+    AppendFila2(&fila, (void*)&fiboThread);
+    AppendFila2(&fila, (void*)&triThread);
+    
+  	//printf("main loop");
+    getcontext(&contextStartLoop);
+    
     if(FirstFila2(&fila) == 0) {
 
-	    ucontext_t* context = (ucontext_t*)GetAtIteratorFila2(&fila);
+	    TCB_t* tcb = (TCB_t*)GetAtIteratorFila2(&fila);
 		DeleteAtIteratorFila2(&fila);
 
-		//makecontext(context, (void*))
-
-		setcontext(context);
-
-    }
+		setcontext(&(*tcb).context);
+	}
     
-   	printf("Fim\n");
+   	//printf("Fim\n");
    	return 0;
-
-//PA termo i : a
-//PG termo i : b
-//Fibo termo i: f
-//Tri termo i : t 
-
-
-
-    //getcontext(&contextTest);
-    //setcontext(&contextFibo);
-
-	return 0;
 }
