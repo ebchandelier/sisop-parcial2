@@ -14,7 +14,7 @@ int main(int argc, char *argv[ ]) {
 	ret_id = cidentify(str1, 300);
 	printf("ret %d -- %s\n", ret_id, str1);
 
-	ret_id = cidentify(str2, 300);
+	ret_id = cidentify(str2, 25);
 	printf("ret %d -- %s\n", ret_id, str2);
 
 	return 0;
