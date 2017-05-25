@@ -1,7 +1,9 @@
 #include "../include/cthread.h"
 #include "../include/cdata.h"
 #include "../include/support.h"
- 
+
+#include <stdlib.h>
+#include <stdio.h> 
 #include <ucontext.h>
 #include <string.h>
 
@@ -49,10 +51,10 @@ int findTidWait(FILA2 *queue, int id){
 		element = (csem_t*)GetAtIteratorFila2(queue);
 		subqueue = element->fila;
 
-		if (findTid((*subqueue), id))
+		if (findTid((subqueue), id))
 			return 1;
 		else
-			invalid = NextFila2(queue);
+			invalidSem = NextFila2(queue);
 	}
 
 	return 0;
@@ -164,14 +166,14 @@ int ccreate (void* (*start)(void*), void *arg, int prio){
 	newcontext.uc_stack.ss_size = STACKSIZE;
 	newcontext.uc_link = &returnFunction;
 
-	makecontext(&newcontext, start, 1); //number of arguments = 1
+	makecontext(&newcontext, (void*)start, 1); //number of arguments = 1
 
 	TCB_t *newTCB = malloc(sizeof(TCB_t));
 
 	newTCB->tid = tid_counter++;
 	newTCB->state = 1; //?
 	newTCB->ticket = prio;
-	newTCB->context = *newcontext;
+	newTCB->context = newcontext;
 
 	switch(prio){
 		case 0:
@@ -202,7 +204,7 @@ int csetprio(int tid, int prio){
 	
 	// look for tid in filaWait
 
-	if (findTidWait(filaWait, tid)){
+	if (findTidWait(&filaWait, tid)){
 
 		csem_t *sem = (csem_t*)GetAtIteratorFila2(&filaWait);
 		FILA2 *queue = sem->fila;
@@ -216,7 +218,7 @@ int csetprio(int tid, int prio){
 
 	// look for tid in filaJoin
 
-	if (findTidJoin(filaJoin, tid)){
+	if (findTidJoin(&filaJoin, tid)){
 		Dependance *elementD = (Dependance*)GetAtIteratorFila2(&filaJoin);
 
 		elementD->dependant->ticket = prio;
@@ -224,36 +226,36 @@ int csetprio(int tid, int prio){
 		return 0;
 	}
 
-	if (findTid(executando, tid)){
-		element = (TBC_t*)GetAtIteratorFila2(&executando);
+	if (findTid(&executando, tid)){
+		element = (TCB_t*)GetAtIteratorFila2(&executando);
 		element->ticket = prio;
 		return 0;
 	}
 	
-	if (!found && findTid(aptos0, tid)){
+	if (!found && findTid(&aptos0, tid)){
 		found = 1;
-		element = (TBC_t*)GetAtIteratorFila2(&aptos0);
+		element = (TCB_t*)GetAtIteratorFila2(&aptos0);
 		if (DeleteAtIteratorFila2(&aptos0))
 			return -1;
 	}
 
-	if (!found && findTid(aptos1, tid)){
+	if (!found && findTid(&aptos1, tid)){
 		found = 1;
-		element = (TBC_t*)GetAtIteratorFila2(&aptos1);
+		element = (TCB_t*)GetAtIteratorFila2(&aptos1);
 		if (DeleteAtIteratorFila2(&aptos1))
 			return -1;
 	}
 
-	if (!found && findTid(aptos2, tid)){
+	if (!found && findTid(&aptos2, tid)){
 		found = 1;
-		element = (TBC_t*)GetAtIteratorFila2(&aptos2);
+		element = (TCB_t*)GetAtIteratorFila2(&aptos2);
 		if (DeleteAtIteratorFila2(&aptos2))
 			return -1;
 	}
 
-	if (!found && findTid(aptos3, tid)){
+	if (!found && findTid(&aptos3, tid)){
 		found = 1;
-		element = (TBC_t*)GetAtIteratorFila2(&aptos3);
+		element = (TCB_t*)GetAtIteratorFila2(&aptos3);
 		if (DeleteAtIteratorFila2(&aptos3))
 			return -1;
 	}
@@ -363,7 +365,7 @@ int cyield(void){
 		return -1;
 	}
 
-	swapcontext(currentContext,newContext);
+	swapcontext(currentContext,nextContext);
 
 	return 0;
 }
@@ -378,7 +380,7 @@ int cjoin(int tid){
 	TCB_t *next;
 	ucontext_t *currentContext;
 	ucontext_t *nextContext;
-	Dependance element;
+	Dependance *element;
 
 	// First we check if thread that we're waiting for exists
 	if (!exists(tid))
@@ -471,8 +473,12 @@ int csem_init(csem_t *sem, int count){
 	return 0;
 }
 
-int cwait(csem_t *sem); //?
-int csignal(csem_t *sem); //?
+int cwait(csem_t *sem){
+return 0;
+} //?
+int csignal(csem_t *sem){
+return 0;
+} //?
 
 int cidentify (char *name, int size){
 	static const char idString[STRINGLENGTH] = "Bruno Loureiro - 260725\nEduardo Bassani - 261591";
