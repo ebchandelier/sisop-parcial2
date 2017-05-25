@@ -255,10 +255,16 @@ int ccreate (void* (*start)(void*), void *arg, int prio){
 	static int firstTime = 1;
 	static int tid_counter = 0;
 	static ucontext_t returnFunction;
+	int hasArg = 1;
 
 	if (prio < 0 || prio > 3){
 		printf("Prioridade invalida\n");
 		return -1;
+	}
+
+	//if argument is NULL:
+	if (!arg){
+		hasArg = 0;
 	}
 
 	if (firstTime){
@@ -308,7 +314,11 @@ int ccreate (void* (*start)(void*), void *arg, int prio){
 	newcontext.uc_stack.ss_size = STACKSIZE;
 	newcontext.uc_link = &returnFunction;
 
-	makecontext(&newcontext, (void*)start, 1, arg); //number of arguments = 1
+	if (hasArg){
+		makecontext(&newcontext, (void*)start, 1, arg);
+	}else{
+		makecontext(&newcontext, (void*)start, 0);
+	}
 
 	TCB_t *newTCB = malloc(sizeof(TCB_t));
 
