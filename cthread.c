@@ -8,7 +8,6 @@
 #include <string.h>
 
 #define STACKSIZE 8192
-#define STRINGLENGTH 55
 
 struct sJoinDependance {
 	TCB_t *dependant;
@@ -75,6 +74,21 @@ int findTidJoin(FILA2 *queue, int id){
 	return 0;
 }
 
+int findDependance(FILA2 *queue, int id){
+	int invalid = FirstFila2(queue);
+	Dependance *element;
+
+	while (!invalid){
+		element = (Dependance*)GetAtIteratorFila2(queue);
+
+		if (element->dependsOn == id)
+			return 1;
+		else
+			invalid = NextFila2(queue);
+	}
+	return 0;
+}
+
 int schedule(){
 
 	if (!FirstFila2(&aptos0))
@@ -106,6 +120,132 @@ int exists(int tid){
 		|| findTid(&aptos0, tid) || findTid(&aptos1, tid) || findTid(&aptos2, tid)
 	 	|| findTid(&aptos3, tid) || findTidWait(&filaWait, tid) || findTidJoin(&filaJoin, tid);
 	 	
+}
+
+//Check if any thread depends on current (returning) thread.
+int checkDependances(int tid){
+
+	if (findDependance(&filaJoin,tid)){
+		//move from blocked to ready (according to its priority)
+		TCB_t *newTCB;
+		Dependance *dependance = (Dependance*)GetAtIteratorFila2(&filaJoin);
+		newTCB = dependance->dependant;
+		int prio = newTCB->ticket;
+
+		if (DeleteAtIteratorFila2(&filaJoin)){
+			return -1;
+		}
+
+		free(dependance);
+
+		switch(prio){
+			case 0:
+				if (AppendFila2(&aptos0, (void*)newTCB)){
+					return -1;
+				}
+				break;
+			case 1:
+				if (AppendFila2(&aptos1, (void*)newTCB)){
+					return -1;
+				}
+				break;
+			case 2:
+				if (AppendFila2(&aptos2, (void*)newTCB)){
+					return -1;
+				}
+				break;
+			case 3:
+				if (AppendFila2(&aptos3, (void*)newTCB)){
+					return -1;
+				}
+				break;
+			default:
+				return -1;
+				break;
+		}
+
+
+	}
+
+	return 0;
+
+}
+
+void endThread(ucontext_t *newcontext){
+
+	static int firstTime = 1;
+
+	if(getcontext(newcontext)){
+		printf("Erro criando contexto de retorno\n");
+	}
+
+	if (!firstTime){
+		TCB_t *current;
+		TCB_t *next;
+		int nextThread;
+
+		if (FirstFila2(&executando)){
+			printf("Erro na funcao de retorno\n");
+		}
+		current = (TCB_t*)GetAtIteratorFila2(&executando);
+		if (DeleteAtIteratorFila2(&executando)){
+			printf("Erro[2] na funcao de retorno\n");
+		}
+
+		checkDependances(current->tid);
+
+
+		//start
+
+		nextThread = schedule();
+
+		switch (nextThread){
+			case 0:
+				next = (TCB_t*)GetAtIteratorFila2(&aptos0);
+				if (DeleteAtIteratorFila2(&aptos0)){
+					printf("Erro[3,1] na funcao de retorno\n");
+				}
+				break;
+
+			case 1:
+				next = (TCB_t*)GetAtIteratorFila2(&aptos1);
+				if (DeleteAtIteratorFila2(&aptos1)){
+					printf("Erro[3,2] na funcao de retorno\n");
+				}
+				break;
+
+			case 2:
+				next = (TCB_t*)GetAtIteratorFila2(&aptos2);
+				if (DeleteAtIteratorFila2(&aptos2)){
+					printf("Erro[3,3] na funcao de retorno\n");
+				}
+				break;
+
+			case 3:
+				next = (TCB_t*)GetAtIteratorFila2(&aptos3);
+				if (DeleteAtIteratorFila2(&aptos3)){
+					printf("Erro[3,4] na funcao de retorno\n");
+				}
+				break;
+
+			default:
+				printf("Erro[3,5] na funcao de retorno\n");
+				break;
+		}
+
+		if (AppendFila2(&executando, next)){
+			printf("Erro[4] na funcao de retorno\n");
+		}
+
+		free(current);
+
+		setContext(next->context);
+
+		//f
+	}
+
+	firstTime = 0;
+
 }
 
 //TO-DO
@@ -151,6 +291,7 @@ int ccreate (void* (*start)(void*), void *arg, int prio){
 
 		// initialize returnFunction's context
 
+		endThread(&returnFunction);
 
 	}
 
@@ -166,7 +307,7 @@ int ccreate (void* (*start)(void*), void *arg, int prio){
 	newcontext.uc_stack.ss_size = STACKSIZE;
 	newcontext.uc_link = &returnFunction;
 
-	makecontext(&newcontext, (void*)start, 1); //number of arguments = 1
+	makecontext(&newcontext, (void*)start, 1, arg); //number of arguments = 1
 
 	TCB_t *newTCB = malloc(sizeof(TCB_t));
 
@@ -470,22 +611,157 @@ int csem_init(csem_t *sem, int count){
 	}
 	sem->fila = queue;
 
+	if(AppendFila2(&filaWait, (void*)sem)){
+		return -1;
+	}
+
 	return 0;
 }
 
 int cwait(csem_t *sem){
-return 0;
-} //?
+
+	if (sem->count <= 0){
+		// There are not enough free resources.
+		// We must block it
+		// i.e., remove it from running, insert it in this queue and select a new thread to run.
+		TCB_t *current;
+		TCB_t *next;
+		ucontext_t *currentContext;
+		ucontext_t *nextContext;
+		int nextThread;
+
+		if (FirstFila2(&executando)){
+			return -1;
+		}
+
+		current = GetAtIteratorFila2(&executando);
+
+		if (DeleteAtIteratorFila2(&executando)){
+			return -1;
+		}
+
+		if (AppendFila2(sem->fila, current)){
+			return -1;
+		}
+
+		nextThread = schedule();
+
+		switch (nextThread){
+			case 0:
+				next = (TCB_t*)GetAtIteratorFila2(&aptos0);
+				if (DeleteAtIteratorFila2(&aptos0)){
+					return -1;
+				}
+				break;
+
+			case 1:
+				next = (TCB_t*)GetAtIteratorFila2(&aptos1);
+				if (DeleteAtIteratorFila2(&aptos1)){
+					return -1;
+				}
+				break;
+
+			case 2:
+				next = (TCB_t*)GetAtIteratorFila2(&aptos2);
+				if (DeleteAtIteratorFila2(&aptos2)){
+					return -1;
+				}
+				break;
+
+			case 3:
+				next = (TCB_t*)GetAtIteratorFila2(&aptos3);
+				if (DeleteAtIteratorFila2(&aptos3)){
+					return -1;
+				}
+				break;
+
+			default:
+				return -1;
+				break;
+		}
+
+		currentContext = &(current->context);
+		nextContext = &(next->context);
+
+		if (AppendFila2(&executando, next)){
+			return -1;
+		}
+
+		sem->count--;
+
+		swapcontext(currentContext,nextContext);
+
+		return 0;
+
+	}
+
+	sem->count--;
+
+	return 0;
+}
 int csignal(csem_t *sem){
-return 0;
-} //?
+
+	if (sem->count < 0){
+		// There are threads currently blocked, waiting for a signal.
+		// We must "unblock it"
+		// i.e., remove it from this queue and place it on ready
+
+		TCB_t *element;
+		int prio;
+
+		if(FirstFila2(sem->fila)){
+			return -1;
+		}
+
+		element = (TCB_t*)GetAtIteratorFila2(sem->fila);
+
+		if(DeleteAtIteratorFila2(sem->fila)){
+			return -1;
+		}
+
+		prio = element->ticket;
+
+
+		switch(prio){
+			case 0:
+				if(AppendFila2(&aptos0, (void*)element)){
+					return -1;
+				}
+				break;
+			case 1:
+				if(AppendFila2(&aptos1, (void*)element)){
+					return -1;
+				}
+				break;
+			case 2:
+				if(AppendFila2(&aptos2, (void*)element)){
+					return -1;
+				}
+				break;
+			case 3:
+				if(AppendFila2(&aptos3, (void*)element)){
+					return -1;
+				}
+				break;
+			default:
+				return -1;
+				break;
+		}
+
+	}
+
+	sem->count++;
+
+	return 0;
+}
 
 int cidentify (char *name, int size){
-	static const char idString[STRINGLENGTH] = "Bruno Loureiro - 260725\nEduardo Bassani - 261591";
+	static const char idString[] = "Bruno Loureiro - 260725\nEduardo Bassani - 261591";
 	int nChars = size;
+	int length = strlength(idString)+1;
 
-	if (size > STRINGLENGTH){
-		nChars = STRINGLENGTH;
+	if (size > length){
+		nChars = length;
 	}
 
 	memcpy(name, idString, nChars);
