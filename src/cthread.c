@@ -6,6 +6,7 @@
 #include <stdio.h> 
 #include <ucontext.h>
 #include <string.h>
+#include <ucontext.h>
 
 #define STACKSIZE 8192
 
@@ -334,7 +335,7 @@ int ccreate (void* (*start)(void*), void *arg, int prio){
 
 	}
 
-	return 0;
+	return tid_counter-1;
 }
 
 //TO-DO
