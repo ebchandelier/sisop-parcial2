@@ -1,161 +1,87 @@
+
+//
+// Programa produtor consumidor
+//
+// O escalonador é não preemptivo, por isso, certas seções críticas não
+// aparecem com a proteção de exclusão mútua.
+//
+// O programa fica em laço infinito de produção e consumo
+//
+// Disclamer: este programa foi desenvolvido para auxiliar no desenvolvimento
+//            de testes para o micronúcleo. NÃO HÁ garantias de estar correto.
+
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <ucontext.h>
+#include <time.h>
 
-#include "../include/cdata.h"
-#include "../include/cthread.h"
 #include "../include/support.h"
+#include "../include/cthread.h"
 
-int runFibo(int n) {
+#define	N	10
+#define MAXPROD 100
+#define TRUE	1
 
-	if(n==0) {
+int	buffer[N];
+int     MaxProd;
+csem_t	vazio, cheio, mutex;
 
-		return 0;
+// Simula uma thread ficar bloqueada a espera por "passar um tempo".
+// Na verdade, volta a apto e não avança a execução por i vezes.
 
-	} else if(n==1) {
-
-		return 1;
-
-	} else {
-
-		return runFibo(n-1) + runFibo(n-2);
-	}
-
-	return -666;
-}
+void sleepao(void){
+     int i = 0;
  
-void Fibo(int *arg) {
-	int value = *arg;
-	int n = 1;
-	while(n<=value) {
-	
-		printf("FIBO termo %d : %d\n", n, runFibo(n));
-		n++;
-		
-		if(n<=value) {
+     i = rand()%5 + 1;
+     for (; i<0; i--) cyield();
+     return;
+}
 
-			cyield();
-		}		
-		
-	}
+void *produtor(void *arg) {
+   int in=0;
+
+   while(TRUE) {
+      sleepao();
+      cwait(&vazio);
+      cwait(&mutex);
+      buffer[in] = (rand() + 1) % N;
+      printf("prod %d...\n",buffer[in]);
+      in= (in+1) % N;
+      csignal(&mutex);
+      csignal(&cheio);
+   }
+}
+
+void *consumidor(void *arg) {
+   int out=0;
+
+   while(TRUE) { 
+      sleepao();
+      cwait(&cheio);
+      cwait(&mutex);
+      printf("cons %d...\n",buffer[out]);
+      out = (out+1) % N;
+      csignal(&mutex);
+      csignal(&vazio);
+   }
+}
+
+int main(int argc, char *argv[ ]) {
+    int cons, prod;
+
+    srand((unsigned)time(NULL));
+
+    csem_init(&mutex, 1);
+    csem_init(&vazio, N);
+    csem_init(&cheio, 0);
+
+    prod = ccreate((void *)produtor, (void *)NULL, 0);
+    cons = ccreate((void *)consumidor, (void *)NULL, 0);
+
+    cjoin(prod);
+    cjoin(cons);
 }
 
 
 
-int runTRI(int n) {
 
-	if(n==0) {
-
-		return 1;
-
-	} else {
-
-		return runTRI(n-1) + n-1;
-	}
-
-	return -666;
-}
-
-
-void TRI(int *arg) {
-	int value = *arg;
-
-	int n = 1;
-	while(n<=value) {
-	
-		printf("TRI termo %d : %d\n", n, runTRI(n));
-		n++;
-		
-		if(n<=value) {
-
-			cyield();
-		}		
-		
-	}
-}
-
-
-int runPA(int n) {
-	
-	if(n==1) {
-
-		return 1;
-
-	} else {
-
-		return 4 + runPA(n-1);
-	}
-
-	return -666;
-}
-
-void PA(int *arg) {
-	int value = *arg;
-
-	int n = 1;
-	while(n<=value) {
-	
-		printf("PA termo %d : %d\n", n, runPA(n));
-		n++;
-		
-		if(n<=value) {
-
-			cyield();
-		}		
-		
-	}
-}
-	
-
-int runPG(int n) {
-
-	if(n==1) {
-
-		return 1;
-
-	} else {
-
-		return 2 * runPG(n-1);
-	}
-
-	return -666;
-}
-
-void PG(int *arg) {
-	int value = *arg;
-	int n = 1;
-	while(n<=value) {
-	
-		printf("PG termo %d : %d\n", n, runPG(n));
-		n++;
-		
-		if(n<=value) {
-
-			cyield();
-		}		
-	}
-}
-
-
-int main(int argc, char const *argv[])
-{
-	//printf("%d %d %d %d\n", Fibo(10), TRI(10), PA(10), PG(10));
-	int argPA 	= 8;
-	int argPG 	= 10;
-	int argFibo = 12;
-	int argTRI 	= 6;
-	
-	int idPA 	= ccreate((void*)&PA, (void*)&argPA, 0);
-	int idPG 	= ccreate((void*)&PG, (void*)&argPG, 0);
-	int idFibo	= ccreate((void*)&Fibo, (void*)&argFibo, 0);
-	int idTRI 	= ccreate((void*)&TRI, (void*)&argTRI, 0);
-
-	csetprio(idPG, 2);
-	cjoin(idPA);
-	cjoin(idPG);
-	cjoin(idFibo);
-	cjoin(idTRI);
-
-   	//printf("Fim\n");
-   	return 0;
-}
