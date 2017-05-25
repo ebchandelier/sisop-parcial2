@@ -240,7 +240,7 @@ void endThread(ucontext_t *newcontext){
 
 		free(current);
 
-		setcontext(next->context);
+		setcontext(&(next->context));
 
 		//f
 	}
