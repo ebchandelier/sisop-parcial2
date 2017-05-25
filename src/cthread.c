@@ -240,7 +240,7 @@ void endThread(ucontext_t *newcontext){
 
 		free(current);
 
-		setContext(next->context);
+		setcontext(next->context);
 
 		//f
 	}
@@ -759,7 +759,7 @@ int csignal(csem_t *sem){
 int cidentify (char *name, int size){
 	static const char idString[] = "Bruno Loureiro - 260725\nEduardo Bassani - 261591";
 	int nChars = size;
-	int length = strlength(idString)+1;
+	int length = strlen(idString)+1;
 
 	if (size > length){
 		nChars = length;
